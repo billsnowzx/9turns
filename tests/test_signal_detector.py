@@ -56,3 +56,31 @@ def test_short_series_less_than_9_bars_no_error():
     td = TDSequential(df)
     signals = td.detect_all(cooldown_bars=0)
     assert isinstance(signals, pd.DataFrame)
+
+
+def test_countdown_modes_strict_not_more_than_simplified():
+    down = []
+    v = 200
+    for i in range(90):
+        v -= 1
+        if i % 6 == 0:
+            v += 2
+        down.append(v)
+    up = []
+    for i in range(90):
+        v += 1
+        if i % 6 == 0:
+            v -= 2
+        up.append(v)
+    close = down + up
+    df = _make_ohlcv(close)
+
+    td_simple = TDSequential(df, countdown_mode="simplified")
+    td_strict = TDSequential(df, countdown_mode="strict")
+    simple = td_simple.detect_all(cooldown_bars=0)
+    strict = td_strict.detect_all(cooldown_bars=0)
+
+    simple_cd = simple[simple["signal"].isin(["buy13", "sell13"])]
+    strict_cd = strict[strict["signal"].isin(["buy13", "sell13"])]
+    assert len(strict_cd) <= len(simple_cd)
+    assert len(strict_cd) != len(simple_cd)

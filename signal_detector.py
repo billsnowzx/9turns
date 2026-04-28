@@ -21,11 +21,22 @@ class TDSequential:
     df : DataFrame，必须含 open/high/low/close/volume 列
     """
 
-    def __init__(self, df: pd.DataFrame):
+    def __init__(self, df: pd.DataFrame, countdown_mode: str = "simplified"):
+        """
+        Parameters
+        ----------
+        df : OHLCV DataFrame
+        countdown_mode : "simplified" | "strict"
+            simplified: count when price hits basic Countdown condition.
+            strict: adds qualifier and cancellation checks, so signals are fewer.
+        """
+        if countdown_mode not in ("simplified", "strict"):
+            raise ValueError("countdown_mode must be 'simplified' or 'strict'")
         self.df = df.copy()
         self.close = df["close"].values
         self.dates = df.index
         self.n = len(df)
+        self.countdown_mode = countdown_mode
 
     # ─────────────────────────────────────────────────────────────
     # 公共入口
@@ -130,15 +141,51 @@ class TDSequential:
 
             direction = "buy" if setup_type == "buy9" else "sell"
             count = 0
+            setup_close = close[setup_bar]
+            setup_high = high[setup_bar]
+            setup_low = low[setup_bar]
             for i in range(setup_bar + 1, self.n):
                 if i < 2:
                     continue
+
                 if direction == "buy":
-                    if close[i] <= low[i - 2]:
-                        count += 1
+                    hit = close[i] <= low[i - 2]
+                    # strict cancel: upside reversal invalidates current countdown
+                    if self.countdown_mode == "strict":
+                        if close[i] > setup_high:
+                            break
+                        if i >= 4 and close[i] > close[i - 4]:
+                            break
+                    if hit:
+                        if self.countdown_mode == "strict":
+                            # strict qualifier: downside should persist vs setup bar
+                            if close[i] <= setup_close and low[i] <= setup_low:
+                                count += 1
+                            else:
+                                count = 0
+                        else:
+                            count += 1
+                    elif self.countdown_mode == "strict":
+                        count = 0
                 else:
-                    if close[i] >= high[i - 2]:
-                        count += 1
+                    hit = close[i] >= high[i - 2]
+                    # strict cancel: downside reversal invalidates current countdown
+                    if self.countdown_mode == "strict":
+                        if close[i] < setup_low:
+                            break
+                        if i >= 4 and close[i] < close[i - 4]:
+                            break
+                    if hit:
+                        if self.countdown_mode == "strict":
+                            # strict qualifier: upside should persist vs setup bar
+                            if close[i] >= setup_close and high[i] >= setup_high:
+                                count += 1
+                            else:
+                                count = 0
+                        else:
+                            count += 1
+                    elif self.countdown_mode == "strict":
+                        count = 0
 
                 if count == 13:
                     records.append((i, f"{direction}13"))
