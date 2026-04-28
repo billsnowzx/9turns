@@ -13,6 +13,7 @@ from backtester import Backtester
 from combo_strategy import ComboStrategy
 from data_loader import DataLoader
 from reliability import ReliabilityAnalyzer
+from report_generator import generate_research_report
 from signal_detector import TDSequential
 from splitter import WalkForwardSplitter
 
@@ -145,8 +146,11 @@ def run_full_research(
     }
     pd.DataFrame([summary["train"], summary["test"]]).to_csv("output/walkforward_summary.csv", index=False, encoding="utf-8-sig")
 
+    report_path = generate_research_report(rel_report, train_combo_results, {"train": bt_train_result, "test": bt_test_result, "summary": summary})
+
     print("\n" + "=" * 60)
     print("  研究完成！报告已保存到 output/ 目录")
+    print(f"  研究报告: {report_path}")
     print("=" * 60)
 
     return rel_report, train_combo_results, {"train": bt_train_result, "test": bt_test_result, "summary": summary}
