@@ -42,9 +42,12 @@ def run_full_research(
 ):
     config = config or load_config()
     data_cfg = config.get("data", {})
-    freq = data_cfg.get("freq", freq)
-    start = data_cfg.get("start", start)
-    end = data_cfg.get("end", end)
+    if freq is None:
+        freq = data_cfg.get("freq", "daily")
+    if start is None:
+        start = data_cfg.get("start", "2015-01-01")
+    if end is None:
+        end = data_cfg.get("end", "2024-12-31")
 
     print("=" * 60)
     print(f"  九转神奇研究框架 | 市场:{market} | 标的:{symbol} | 周期:{freq}")

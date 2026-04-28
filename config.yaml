@@ -9,6 +9,7 @@ data:
   freq: daily
 
 backtest:
+  engine: simple
   lag: 1
   sl_stop: 0.05
   tp_stop: 0.15

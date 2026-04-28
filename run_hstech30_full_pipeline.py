@@ -59,6 +59,14 @@ def run_one(symbol):
     return subprocess.run(cmd, check=False).returncode
 
 
+def normalize_hk_symbol(sym: str) -> str:
+    code = sym.upper().replace(".HK", "")
+    if not code.isdigit():
+        return sym.upper()
+    code4 = str(int(code)).zfill(4)
+    return f"{code4}.HK"
+
+
 def archive_outputs(symbol):
     tgt = ARCHIVE_ROOT / symbol
     tgt.mkdir(parents=True, exist_ok=True)
@@ -185,12 +193,13 @@ def main():
 
     status_rows = ["symbol,ok"]
     for s in symbols:
-        print(f"Running {s} ...")
-        rc = run_one(s)
+        s_norm = normalize_hk_symbol(s)
+        print(f"Running {s} -> {s_norm} ...")
+        rc = run_one(s_norm)
         ok = 1 if rc == 0 else 0
         if ok:
-            archive_outputs(s)
-        status_rows.append(f"{s},{ok}")
+            archive_outputs(s_norm)
+        status_rows.append(f"{s_norm},{ok}")
 
     (ARCHIVE_ROOT / "run_status.csv").write_text("\n".join(status_rows), encoding="utf-8")
 

@@ -37,13 +37,49 @@ class Backtester:
             entry_signals = entry_signals.shift(lag).fillna(False).astype(bool)
             exit_signals = exit_signals.shift(lag).fillna(False).astype(bool)
 
-        try:
-            result = self._run_vectorbt(entry_signals, exit_signals, sl_stop, tp_stop, fees, strategy_name)
-        except Exception:
+        engine = backtest_cfg.get("engine", "simple")
+        if engine == "vectorbt":
+            try:
+                result = self._run_vectorbt(entry_signals, exit_signals, sl_stop, tp_stop, fees, strategy_name)
+            except Exception:
+                result = self._run_simple(entry_signals, exit_signals, sl_stop, tp_stop, fees, strategy_name)
+        else:
             result = self._run_simple(entry_signals, exit_signals, sl_stop, tp_stop, fees, strategy_name)
+        result.update(self._metrics_from_equity(result["equity"]))
         result["entries"] = entry_signals
         result["exits"] = exit_signals
         return result
+
+    def _metrics_from_equity(self, equity: pd.Series) -> Dict:
+        equity = equity.dropna()
+        if equity.empty:
+            return {
+                "total_return": np.nan,
+                "annual_return": np.nan,
+                "sharpe": np.nan,
+                "max_drawdown": np.nan,
+                "calmar": np.nan,
+            }
+
+        daily_ret = equity.pct_change().replace([np.inf, -np.inf], np.nan).dropna()
+        total_ret = (equity.iloc[-1] - self.init_cash) / self.init_cash
+
+        years = (equity.index[-1] - equity.index[0]).days / 365.25
+        annual_ret = (1 + total_ret) ** (1 / years) - 1 if years > 0 and total_ret > -1 else np.nan
+        sharpe = daily_ret.mean() / daily_ret.std() * np.sqrt(252) if len(daily_ret) > 1 and daily_ret.std() > 0 else 0.0
+
+        rolling_max = equity.cummax()
+        drawdown = (equity - rolling_max) / rolling_max
+        max_dd = drawdown.min()
+        calmar = annual_ret / abs(max_dd) if pd.notna(annual_ret) and max_dd < 0 else np.inf
+
+        return {
+            "total_return": float(total_ret),
+            "annual_return": float(annual_ret) if pd.notna(annual_ret) else np.nan,
+            "sharpe": float(sharpe),
+            "max_drawdown": float(max_dd),
+            "calmar": float(calmar) if np.isfinite(calmar) else np.inf,
+        }
 
     def _run_vectorbt(self, entries, exits, sl_stop, tp_stop, fees, name) -> Dict:
         import vectorbt as vbt
