@@ -15,6 +15,8 @@ import numpy as np
 import pandas as pd
 import requests
 
+from hstech_aggregation import aggregate_results as aggregate_hstech_results
+
 URLS = [
     "https://m.aastocks.com/sc/stocks/market/index/hk-index-con.aspx?index=HSTECH",
     "https://www.aastocks.com/sc/stocks/market/index/hk-index-con.aspx?index=HSTECH",
@@ -30,6 +32,7 @@ LIVE_OUT = Path("output")
 ARCHIVE_ROOT = Path("output/hstech30")
 DETAIL_OUT = Path("output/hstech30_detail.csv")
 SUMMARY_OUT = Path("output/hstech30_summary.csv")
+REGIME_OUT = Path("output/hstech30_regime_summary.csv")
 
 
 def fetch_hstech_codes():
@@ -203,11 +206,12 @@ def main():
 
     (ARCHIVE_ROOT / "run_status.csv").write_text("\n".join(status_rows), encoding="utf-8")
 
-    verdict = aggregate_results()
+    verdict = aggregate_hstech_results(ARCHIVE_ROOT, DETAIL_OUT, SUMMARY_OUT, REGIME_OUT)
     print("Done.")
     print(f"- run status: {ARCHIVE_ROOT / 'run_status.csv'}")
     print(f"- detail: {DETAIL_OUT}")
     print(f"- summary: {SUMMARY_OUT}")
+    print(f"- regime summary: {REGIME_OUT}")
     print(f"- verdict: {verdict}")
 
 

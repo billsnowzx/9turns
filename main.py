@@ -32,6 +32,24 @@ def _gap_ratio(a: float, b: float) -> float:
     return abs(a - b) / denom
 
 
+def _walkforward_row(dataset: str, combo_name: str, result: dict) -> dict:
+    annual_return = result.get("annual_return")
+    bh_annual_return = result.get("bh_annual_return")
+    return {
+        "dataset": dataset,
+        "combo_name": combo_name,
+        "annual_return": annual_return,
+        "sharpe": result.get("sharpe"),
+        "max_drawdown": result.get("max_drawdown"),
+        "calmar": result.get("calmar"),
+        "bh_annual_return": bh_annual_return,
+        "bh_sharpe": result.get("bh_sharpe"),
+        "bh_max_drawdown": result.get("bh_max_drawdown"),
+        "excess_annual_return": result.get("excess_annual_return"),
+        "beats_benchmark": result.get("beats_benchmark"),
+    }
+
+
 def run_full_research(
     market="a_share",
     symbol="000300",
@@ -124,27 +142,15 @@ def run_full_research(
     print("\n  ===== In-sample vs Out-of-sample =====")
     print(f"  in-sample annual_return:   {train_ann:.2%}")
     print(f"  out-of-sample annual_return: {test_ann:.2%}")
+    print(f"  out-of-sample buy&hold annual_return: {bt_test_result.get('bh_annual_return', 0.0):.2%}")
+    print(f"  out-of-sample excess annual_return: {bt_test_result.get('excess_annual_return', 0.0):.2%}")
     print(f"  relative gap: {gap:.2%}")
     if gap > 0.5:
         print("  WARNING: train/test 差距 > 50%，可能存在过拟合。")
 
     summary = {
-        "train": {
-            "dataset": "train",
-            "combo_name": best_train_combo["name"],
-            "annual_return": train_ann,
-            "sharpe": bt_train_result.get("sharpe"),
-            "max_drawdown": bt_train_result.get("max_drawdown"),
-            "calmar": bt_train_result.get("calmar"),
-        },
-        "test": {
-            "dataset": "test",
-            "combo_name": best_train_combo["name"],
-            "annual_return": test_ann,
-            "sharpe": bt_test_result.get("sharpe"),
-            "max_drawdown": bt_test_result.get("max_drawdown"),
-            "calmar": bt_test_result.get("calmar"),
-        },
+        "train": _walkforward_row("train", best_train_combo["name"], bt_train_result),
+        "test": _walkforward_row("test", best_train_combo["name"], bt_test_result),
         "annual_return_gap": gap,
     }
     pd.DataFrame([summary["train"], summary["test"]]).to_csv("output/walkforward_summary.csv", index=False, encoding="utf-8-sig")

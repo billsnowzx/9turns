@@ -46,6 +46,10 @@ class Backtester:
         else:
             result = self._run_simple(entry_signals, exit_signals, sl_stop, tp_stop, fees, strategy_name)
         result.update(self._metrics_from_equity(result["equity"]))
+        bh_metrics = self._metrics_from_equity(result["bh_equity"])
+        result.update({f"bh_{key}": value for key, value in bh_metrics.items()})
+        result["excess_annual_return"] = result["annual_return"] - result["bh_annual_return"]
+        result["beats_benchmark"] = bool(result["excess_annual_return"] > 0)
         result["entries"] = entry_signals
         result["exits"] = exit_signals
         return result
