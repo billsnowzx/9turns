@@ -66,13 +66,16 @@ class ReliabilityAnalyzer:
         对指定信号类型，计算每个信号发出后 N 日的实际收益率。
         """
         sigs = self.signals_df[self.signals_df["signal"] == signal_type].copy()
-        price_arr  = self.close.values
-        price_dates = self.close.index
+        close_arr = self.close.values
+        open_arr = self.price_df["open"].values
 
         records = []
         for _, row in sigs.iterrows():
-            bar_idx = row["bar_index"]
-            entry_price = price_arr[bar_idx]
+            bar_idx = int(row["bar_index"])
+            exec_idx = bar_idx + 1
+            if exec_idx >= len(open_arr):
+                continue
+            entry_price = open_arr[exec_idx]
 
             record = {
                 "date":    row["date"],
@@ -80,9 +83,9 @@ class ReliabilityAnalyzer:
                 "close":   entry_price,
             }
             for n in self.FORWARD_DAYS:
-                future_idx = bar_idx + n
-                if future_idx < len(price_arr):
-                    ret = (price_arr[future_idx] - entry_price) / entry_price
+                future_idx = exec_idx + n
+                if future_idx < len(close_arr):
+                    ret = (close_arr[future_idx] - entry_price) / entry_price
                     record[f"ret_{n}d"] = ret
                 else:
                     record[f"ret_{n}d"] = np.nan
