@@ -237,18 +237,44 @@ class ComboStrategy:
     # ─────────────────────────────────────────────────────────────
     # 获取最优组合
     # ─────────────────────────────────────────────────────────────
-    def get_best_combo(self, results: List[Dict]) -> Dict:
+    def get_best_combo(
+        self,
+        results: List[Dict],
+        lag: int = 1,
+        sl_stop: float = 0.05,
+        tp_stop: float = 0.15,
+        fees: float = 0.001,
+    ) -> Dict:
         """
         以 胜率 × 盈亏比 × log(信号数+1) 为综合得分，筛选最优。
         至少需要 10 个信号，避免小样本偏差。
         """
-        valid = [r for r in results if r["n_signals"] >= 10]
+        from backtester import Backtester
+
+        bt = Backtester(self.df)
+        enriched = []
+        for r in results:
+            bt_result = bt.run(
+                entry_signals=r["entries"],
+                exit_signals=r["exits"],
+                lag=lag,
+                sl_stop=sl_stop,
+                tp_stop=tp_stop,
+                fees=fees,
+                strategy_name=r["name"],
+            )
+            r["train_sharpe"] = bt_result.get("sharpe", np.nan)
+            r["train_calmar"] = bt_result.get("calmar", np.nan)
+            r["train_max_dd"] = bt_result.get("max_drawdown", np.nan)
+            enriched.append(r)
+
+        valid = [r for r in enriched if r["n_signals"] >= 10]
         if not valid:
-            valid = results
+            valid = enriched
 
         scored = sorted(
             valid,
-            key=lambda r: r["win_rate"] * r["profit_factor"] * np.log(r["n_signals"] + 1),
+            key=lambda r: (-np.inf if pd.isna(r.get("train_calmar")) else r.get("train_calmar")),
             reverse=True,
         )
         best = scored[0]
