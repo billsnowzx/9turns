@@ -45,7 +45,11 @@ class TDSequential:
         all_records = self._apply_cooldown(all_records, cooldown_bars=cooldown_bars)
         all_records.sort(key=lambda x: x[0])   # 按 bar_index 排序
 
+        if not all_records:
+            return pd.DataFrame(columns=["date", "signal", "bar_index", "close_at_signal"])
+
         result = pd.DataFrame(all_records, columns=["bar_index", "signal"])
+        result["bar_index"] = result["bar_index"].astype(int)
         result["date"] = self.dates[result["bar_index"]]
         result["close_at_signal"] = self.close[result["bar_index"]]
         result = result[["date", "signal", "bar_index", "close_at_signal"]]
