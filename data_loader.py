@@ -1,4 +1,4 @@
-﻿from datetime import datetime
+﻿import warnings
 
 import pandas as pd
 
@@ -34,6 +34,7 @@ class DataLoader:
             raise ValueError(f"unsupported market: {market}")
 
         df = self._standardize(df, freq)
+        df = self._validate_and_align_frequency(df, freq)
         self._validate(df)
         return df
 
@@ -117,11 +118,47 @@ class DataLoader:
             df[col] = pd.to_numeric(df[col], errors="coerce")
         return df
 
+    def _resample_ohlcv(self, df: pd.DataFrame, rule: str) -> pd.DataFrame:
+        return (
+            df.resample(rule)
+            .agg(
+                {
+                    "open": "first",
+                    "high": "max",
+                    "low": "min",
+                    "close": "last",
+                    "volume": "sum",
+                }
+            )
+            .dropna(subset=["open", "high", "low", "close"])
+        )
+
+    def _validate_and_align_frequency(self, df: pd.DataFrame, requested_freq: str) -> pd.DataFrame:
+        if len(df.index) < 3:
+            return df
+        step_series = df.index.to_series().diff().dropna()
+        if step_series.empty:
+            return df
+        step = step_series.mode().iloc[0]
+
+        if requested_freq == "weekly" and step < pd.Timedelta(days=5):
+            warnings.warn("requested weekly but source appears daily; resampling to weekly", RuntimeWarning)
+            return self._resample_ohlcv(df, "W")
+        if requested_freq == "daily" and step > pd.Timedelta(days=2):
+            warnings.warn("requested daily but source appears lower frequency; resampling to daily", RuntimeWarning)
+            return self._resample_ohlcv(df, "D")
+        return df
+
     def _validate(self, df: pd.DataFrame):
         if df is None or df.empty:
             raise TDDataError("input DataFrame is empty")
-        if len(df) < 100:
-            raise TDDataError("not enough bars (<100)")
+        min_required = 100
+        if len(df.index) >= 3:
+            step = df.index.to_series().diff().dropna().mode().iloc[0]
+            if step >= pd.Timedelta(days=5):
+                min_required = 20
+        if len(df) < min_required:
+            raise TDDataError(f"not enough bars (<{min_required})")
         for col in self.REQUIRED_COLS:
             if col not in df.columns:
                 raise TDDataError(f"missing column: {col}")
