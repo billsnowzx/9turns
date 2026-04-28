@@ -3,6 +3,7 @@
 import pandas as pd
 
 from cache import disk_cache
+from exceptions import TDDataError
 
 
 class DataLoader:
@@ -117,7 +118,12 @@ class DataLoader:
         return df
 
     def _validate(self, df: pd.DataFrame):
-        assert len(df) >= 100, "not enough bars (<100)"
+        if df is None or df.empty:
+            raise TDDataError("input DataFrame is empty")
+        if len(df) < 100:
+            raise TDDataError("not enough bars (<100)")
         for col in self.REQUIRED_COLS:
-            assert col in df.columns, f"missing column: {col}"
-        assert not df["close"].isnull().all(), "close is all null"
+            if col not in df.columns:
+                raise TDDataError(f"missing column: {col}")
+        if df["close"].isnull().all():
+            raise TDDataError("close is all null")
