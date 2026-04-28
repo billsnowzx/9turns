@@ -111,7 +111,7 @@ def run_full_research(
         strategy_name=f"{best_train_combo['name']} [TEST]",
     )
     bt_test.print_stats(bt_test_result)
-    bt_test.plot(bt_test_result, save_path="output/backtest_chart.html")
+    bt_test.plot(bt_test_result, save_path="output/backtest_chart.html", split_date=test_df.index[0])
 
     train_ann = float(bt_train_result.get("annual_return", 0.0))
     test_ann = float(bt_test_result.get("annual_return", 0.0))

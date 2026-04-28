@@ -38,9 +38,12 @@ class Backtester:
             exit_signals = exit_signals.shift(lag).fillna(False).astype(bool)
 
         try:
-            return self._run_vectorbt(entry_signals, exit_signals, sl_stop, tp_stop, fees, strategy_name)
+            result = self._run_vectorbt(entry_signals, exit_signals, sl_stop, tp_stop, fees, strategy_name)
         except Exception:
-            return self._run_simple(entry_signals, exit_signals, sl_stop, tp_stop, fees, strategy_name)
+            result = self._run_simple(entry_signals, exit_signals, sl_stop, tp_stop, fees, strategy_name)
+        result["entries"] = entry_signals
+        result["exits"] = exit_signals
+        return result
 
     def _run_vectorbt(self, entries, exits, sl_stop, tp_stop, fees, name) -> Dict:
         import vectorbt as vbt
@@ -161,7 +164,7 @@ class Backtester:
     def print_stats(self, result: Dict):
         print(f"{result['name']} return={result['total_return']:.2%} sharpe={result['sharpe']:.2f} mdd={result['max_drawdown']:.2%}")
 
-    def plot(self, result: Dict, save_path: str = "output/backtest_chart.html"):
+    def plot(self, result: Dict, save_path: str = "output/backtest_chart.html", split_date=None):
         try:
             import plotly.graph_objects as go
             from plotly.subplots import make_subplots
@@ -173,14 +176,75 @@ class Backtester:
         bh_equity = result["bh_equity"]
         close = self.close
 
-        fig = make_subplots(rows=3, cols=1, shared_xaxes=True, row_heights=[0.5, 0.3, 0.2], vertical_spacing=0.07)
+        fig = make_subplots(
+            rows=4,
+            cols=1,
+            shared_xaxes=True,
+            row_heights=[0.4, 0.25, 0.15, 0.2],
+            vertical_spacing=0.06,
+            subplot_titles=("Equity", "Price with Signals", "Drawdown", "Monthly Return Heatmap"),
+        )
         fig.add_trace(go.Scatter(x=equity.index, y=equity / self.init_cash, name=result["name"]), row=1, col=1)
         fig.add_trace(go.Scatter(x=bh_equity.index, y=bh_equity / self.init_cash, name="buy&hold"), row=1, col=1)
         fig.add_trace(go.Scatter(x=close.index, y=close, name="close", showlegend=False), row=2, col=1)
+
+        entries = result.get("entries")
+        exits = result.get("exits")
+        if entries is not None:
+            entry_idx = entries[entries].index
+            if len(entry_idx) > 0:
+                fig.add_trace(
+                    go.Scatter(
+                        x=entry_idx,
+                        y=close.reindex(entry_idx),
+                        mode="markers",
+                        marker=dict(symbol="triangle-up", color="green", size=9),
+                        name="buy",
+                    ),
+                    row=2,
+                    col=1,
+                )
+        if exits is not None:
+            exit_idx = exits[exits].index
+            if len(exit_idx) > 0:
+                fig.add_trace(
+                    go.Scatter(
+                        x=exit_idx,
+                        y=close.reindex(exit_idx),
+                        mode="markers",
+                        marker=dict(symbol="triangle-down", color="red", size=9),
+                        name="sell",
+                    ),
+                    row=2,
+                    col=1,
+                )
 
         rolling_max = equity.cummax()
         drawdown = (equity - rolling_max) / rolling_max * 100
         fig.add_trace(go.Scatter(x=drawdown.index, y=drawdown, name="drawdown", fill="tozeroy", showlegend=False), row=3, col=1)
 
-        fig.update_layout(template="plotly_white", height=750)
+        monthly = equity.pct_change().resample("M").apply(lambda s: (1 + s).prod() - 1)
+        if not monthly.empty:
+            heat = monthly.to_frame(name="ret")
+            heat["year"] = heat.index.year
+            heat["month"] = heat.index.month
+            pivot = heat.pivot(index="year", columns="month", values="ret")
+            fig.add_trace(
+                go.Heatmap(
+                    z=pivot.values,
+                    x=[int(c) for c in pivot.columns],
+                    y=[int(i) for i in pivot.index],
+                    colorscale="RdYlGn",
+                    zmid=0,
+                    name="monthly",
+                    showscale=True,
+                ),
+                row=4,
+                col=1,
+            )
+
+        if split_date is not None:
+            fig.add_vline(x=split_date, line_dash="dash", line_color="black")
+
+        fig.update_layout(template="plotly_white", height=1000)
         fig.write_html(save_path)
