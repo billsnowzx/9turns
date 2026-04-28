@@ -1,0 +1,20 @@
+﻿FORWARD_DAYS: [3, 5, 10, 20]
+
+countdown_mode: simplified
+hold_days: 10
+
+data:
+  start: "2015-01-01"
+  end: "2024-12-31"
+  freq: daily
+
+backtest:
+  lag: 1
+  sl_stop: 0.05
+  tp_stop: 0.15
+  fees: 0.001
+  init_cash: 1000000
+
+regime:
+  ma_window: 200
+  bear_threshold: 0.9

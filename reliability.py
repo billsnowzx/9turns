@@ -14,10 +14,12 @@ class ReliabilityAnalyzer:
     FORWARD_DAYS = [3, 5, 10, 20]
     ALPHA = 0.05
 
-    def __init__(self, price_df: pd.DataFrame, signals_df: pd.DataFrame):
+    def __init__(self, price_df: pd.DataFrame, signals_df: pd.DataFrame, config: dict | None = None):
+        self.config = config or {}
         self.price_df = price_df.copy()
         self.signals_df = signals_df.copy()
         self.close = self.price_df["close"]
+        self.FORWARD_DAYS = self.config.get("FORWARD_DAYS", self.FORWARD_DAYS)
         self._add_market_regime()
 
     def _add_market_regime(self):

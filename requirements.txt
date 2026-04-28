@@ -1,0 +1,16 @@
+# 九转神奇量化研究框架 — 依赖清单
+akshare>=1.12.0
+yfinance>=0.2.0
+pandas>=2.0.0
+numpy>=1.24.0
+scipy>=1.10.0
+plotly>=5.14.0
+mplfinance>=0.12.9
+tqdm>=4.65.0
+PyYAML>=6.0
+
+# 可选（高性能回测）
+vectorbt>=0.26.0
+
+# 可选（baostock 备用数据源）
+# baostock>=0.8.8

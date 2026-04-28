@@ -21,7 +21,7 @@ class TDSequential:
     df : DataFrame，必须含 open/high/low/close/volume 列
     """
 
-    def __init__(self, df: pd.DataFrame, countdown_mode: str = "simplified"):
+    def __init__(self, df: pd.DataFrame, countdown_mode: str = "simplified", config: dict | None = None):
         """
         Parameters
         ----------
@@ -30,6 +30,8 @@ class TDSequential:
             simplified: count when price hits basic Countdown condition.
             strict: adds qualifier and cancellation checks, so signals are fewer.
         """
+        self.config = config or {}
+        countdown_mode = self.config.get("countdown_mode", countdown_mode)
         if countdown_mode not in ("simplified", "strict"):
             raise ValueError("countdown_mode must be 'simplified' or 'strict'")
         self.df = df.copy()

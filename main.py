@@ -3,18 +3,27 @@
 运行入口：python main.py
 """
 
+import os
 import warnings
+
+import pandas as pd
+import yaml
+
+from backtester import Backtester
+from combo_strategy import ComboStrategy
+from data_loader import DataLoader
+from reliability import ReliabilityAnalyzer
+from signal_detector import TDSequential
+from splitter import WalkForwardSplitter
+
 warnings.filterwarnings("ignore")
 
-import os
-import pandas as pd
 
-from data_loader import DataLoader
-from signal_detector import TDSequential
-from reliability import ReliabilityAnalyzer
-from combo_strategy import ComboStrategy
-from backtester import Backtester
-from splitter import WalkForwardSplitter
+def load_config(path: str = "config.yaml") -> dict:
+    if not os.path.exists(path):
+        return {}
+    with open(path, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f) or {}
 
 
 def _gap_ratio(a: float, b: float) -> float:
@@ -23,23 +32,30 @@ def _gap_ratio(a: float, b: float) -> float:
 
 
 def run_full_research(
-    market="a_share",       # "a_share" | "us" | "hk"
-    symbol="000300",        # A股指数代码 / 美股ticker
-    freq="daily",           # "daily" | "weekly"
+    market="a_share",
+    symbol="000300",
+    freq="daily",
     start="2015-01-01",
     end="2024-12-31",
+    config: dict | None = None,
 ):
+    config = config or load_config()
+    data_cfg = config.get("data", {})
+    freq = data_cfg.get("freq", freq)
+    start = data_cfg.get("start", start)
+    end = data_cfg.get("end", end)
+
     print("=" * 60)
     print(f"  九转神奇研究框架 | 市场:{market} | 标的:{symbol} | 周期:{freq}")
     print("=" * 60)
 
     print("\n[1/5] 获取历史行情数据...")
-    loader = DataLoader()
+    loader = DataLoader(config=config)
     price_df = loader.load(market=market, symbol=symbol, freq=freq, start=start, end=end)
     print(f"  数据量：{len(price_df)} 根K线 | 时间范围：{price_df.index[0].date()} ~ {price_df.index[-1].date()}")
 
     print("\n[2/5] 全样本信号识别...")
-    td = TDSequential(price_df)
+    td = TDSequential(price_df, config=config)
     signals_df = td.detect_all()
     buy9 = signals_df[signals_df["signal"] == "buy9"]
     sell9 = signals_df[signals_df["signal"] == "sell9"]
@@ -53,15 +69,15 @@ def run_full_research(
     )
 
     print("\n[3/5] 可靠性验证...")
-    analyzer = ReliabilityAnalyzer(price_df, signals_df)
+    analyzer = ReliabilityAnalyzer(price_df, signals_df, config=config)
     rel_report = analyzer.full_report()
     analyzer.print_summary(rel_report)
     analyzer.save_report(rel_report, path="output/reliability_report.csv")
 
     print("\n[4/5] 样本内选组合（train）...")
-    td_train = TDSequential(train_df)
+    td_train = TDSequential(train_df, config=config)
     train_signals_df = td_train.detect_all()
-    combo_train = ComboStrategy(train_df, train_signals_df)
+    combo_train = ComboStrategy(train_df, train_signals_df, config=config)
     train_combo_results = combo_train.run_all_combos()
     combo_train.print_summary(train_combo_results)
     combo_train.save_report(train_combo_results, path="output/combo_report_train.csv")
@@ -70,19 +86,17 @@ def run_full_research(
     print(f"  样本内最优组合：{best_train_combo['name']}")
 
     print("\n[5/5] 回测：train / test...")
-    bt_train = Backtester(train_df)
+    bt_train = Backtester(train_df, config=config)
     bt_train_result = bt_train.run(
         entry_signals=best_train_combo["entries"],
         exit_signals=best_train_combo["exits"],
-        sl_stop=0.05,
-        tp_stop=0.15,
         strategy_name=f"{best_train_combo['name']} [TRAIN]",
     )
     bt_train.print_stats(bt_train_result)
 
-    td_test = TDSequential(test_df)
+    td_test = TDSequential(test_df, config=config)
     test_signals_df = td_test.detect_all()
-    combo_test = ComboStrategy(test_df, test_signals_df)
+    combo_test = ComboStrategy(test_df, test_signals_df, config=config)
     test_combo_results = combo_test.run_all_combos()
 
     matched_test_combo = next(
@@ -90,12 +104,10 @@ def run_full_research(
         test_combo_results[0],
     )
 
-    bt_test = Backtester(test_df)
+    bt_test = Backtester(test_df, config=config)
     bt_test_result = bt_test.run(
         entry_signals=matched_test_combo["entries"],
         exit_signals=matched_test_combo["exits"],
-        sl_stop=0.05,
-        tp_stop=0.15,
         strategy_name=f"{best_train_combo['name']} [TEST]",
     )
     bt_test.print_stats(bt_test_result)
@@ -131,19 +143,13 @@ def run_full_research(
         },
         "annual_return_gap": gap,
     }
-    pd.DataFrame([summary["train"], summary["test"]]).to_csv(
-        "output/walkforward_summary.csv", index=False, encoding="utf-8-sig"
-    )
+    pd.DataFrame([summary["train"], summary["test"]]).to_csv("output/walkforward_summary.csv", index=False, encoding="utf-8-sig")
 
     print("\n" + "=" * 60)
     print("  研究完成！报告已保存到 output/ 目录")
     print("=" * 60)
 
-    return rel_report, train_combo_results, {
-        "train": bt_train_result,
-        "test": bt_test_result,
-        "summary": summary,
-    }
+    return rel_report, train_combo_results, {"train": bt_train_result, "test": bt_test_result, "summary": summary}
 
 
 if __name__ == "__main__":
